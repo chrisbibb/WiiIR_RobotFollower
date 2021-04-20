@@ -1,0 +1,368 @@
+
+#include <Wire.h>
+#include <PVision.h>
+
+#define ECHOPINleft 26 //  sensor
+#define TRIGPINleft 27 // 
+#define ECHOPINright 30 //  sensor
+#define TRIGPINright 31 // 
+#define ECHOPINback 39 //  sensor
+#define TRIGPINback 38 // 
+#define ECHOPINfront 47 //  sensor
+#define TRIGPINfront 46 // 
+
+PVision ircam;
+byte result;
+boolean leftSensor, rightSensor, frontSensor, backSensor;
+
+ #include <SoftwareSerial.h>
+
+// Labels for use with the Sabertooth 2x5 motor controller
+
+// Digital pin 13 is the serial transmit pin to the 
+// Sabertooth 2x5
+#define SABER_TX_PIN 13
+
+// NOT USED (but still init'd)
+// Digital pin 12 is the serial receive pin from the 
+// Sabertooth 2x5
+#define SABER_RX_PIN 12
+
+// Set to 9600 through Sabertooth dip switches
+#define SABER_BAUDRATE 9600
+
+// Simplified serial Limits for each motor
+#define SABER_MOTOR1_FULL_FORWARD 127
+#define SABER_MOTOR1_FULL_REVERSE 1
+#define SABER_MOTOR1_FULL_STOP 64
+
+#define SABER_MOTOR2_FULL_FORWARD 255
+#define SABER_MOTOR2_FULL_REVERSE 128
+#define SABER_MOTOR2_FULL_STOP 192
+
+// Motor level to send when issuing the full stop command
+#define SABER_ALL_STOP 0
+
+SoftwareSerial SaberSerial = SoftwareSerial( SABER_RX_PIN, SABER_TX_PIN );
+
+void initSabertooth( void )
+{
+ // Init software UART to communicate 
+ // with the Sabertooth 2x5
+ pinMode( SABER_TX_PIN, OUTPUT );
+ SaberSerial.begin( SABER_BAUDRATE );
+
+ // 2 second time delay for the Sabertooth to init
+ delay( 500 );
+ // Send full stop command
+ setEngineSpeed( SABER_ALL_STOP );
+}
+
+void setEngineSpeed( signed char cNewMotorSpeed )
+{
+ unsigned char cSpeedVal_Motor1 = 0;
+ unsigned char cSpeedVal_Motor2 = 0;
+
+ // Check for full stop command
+ if( cNewMotorSpeed == 0 )
+ {
+   // Send full stop command for both motors
+   SaberSerial.print( 0, BYTE );
+   return;
+ }
+
+ // Calculate the speed value for motor 1
+ if( cNewMotorSpeed >= 100 )
+ {
+   cSpeedVal_Motor1 = SABER_MOTOR1_FULL_FORWARD;
+   cSpeedVal_Motor2 = SABER_MOTOR2_FULL_FORWARD;
+ }
+ else if( cNewMotorSpeed <= -100 )
+ {
+   cSpeedVal_Motor1 = SABER_MOTOR1_FULL_REVERSE;
+   cSpeedVal_Motor2 = SABER_MOTOR2_FULL_REVERSE;
+ }
+ else
+ {
+   // Calc motor 1 speed (Final value ranges from 1 to 127)
+   cSpeedVal_Motor1 = map( cNewMotorSpeed, 
+                          -100, 
+                           100, 
+                           SABER_MOTOR1_FULL_REVERSE,
+                           SABER_MOTOR1_FULL_FORWARD );
+
+    // Calc motor 2 speed (Final value ranges from 128 to 255)
+    cSpeedVal_Motor2 = map( cNewMotorSpeed, 
+                           -100, 
+                            100, 
+                            SABER_MOTOR2_FULL_REVERSE, 
+                            SABER_MOTOR2_FULL_FORWARD );
+ }
+
+ // Fire the values off to the Sabertooth motor controller
+ SaberSerial.print( cSpeedVal_Motor1, BYTE );
+ SaberSerial.print( cSpeedVal_Motor2, BYTE );
+}
+
+void setup()
+{
+  Serial.begin(9600);
+  pinMode(52, OUTPUT);   
+  pinMode(33, OUTPUT);     
+ 
+  pinMode(ECHOPINleft,INPUT);
+  pinMode(TRIGPINleft,OUTPUT); 
+  pinMode(ECHOPINright,INPUT);
+  pinMode(TRIGPINright,OUTPUT); 
+  pinMode(ECHOPINback,INPUT);
+  pinMode(TRIGPINback,OUTPUT); 
+  pinMode(ECHOPINfront,INPUT);
+  pinMode(TRIGPINfront,OUTPUT); 
+  ircam.init();
+  
+   initSabertooth( );
+
+}
+
+void setEngineSpeedDir( signed char cNewMotorSpeedDir )
+{
+ unsigned char cSpeedValDir_Motor1 = 0;
+ unsigned char cSpeedValDir_Motor2 = 0;
+ if( cNewMotorSpeedDir >= 100 )
+ {
+   cSpeedValDir_Motor1 = SABER_MOTOR1_FULL_FORWARD; // GO RIGHT
+   cSpeedValDir_Motor2 = SABER_MOTOR2_FULL_STOP;
+ }
+ else if( cNewMotorSpeedDir <= -100 )
+ {
+   cSpeedValDir_Motor1 = SABER_MOTOR1_FULL_STOP; // GO LEFT
+   cSpeedValDir_Motor2 = SABER_MOTOR2_FULL_FORWARD;
+ }
+ else
+ {
+   // Calc motor 1 speed (Final value ranges from 64 to 127)
+   cSpeedValDir_Motor1 = map( cNewMotorSpeedDir, 
+                             -100, 
+                              100, 
+                              SABER_MOTOR1_FULL_STOP,
+                              SABER_MOTOR1_FULL_FORWARD );
+
+   // Calc motor 2 speed (Final value ranges from 192 to 255)
+   cSpeedValDir_Motor2 = map( cNewMotorSpeedDir, 
+                             -100, 
+                              100, 
+                              SABER_MOTOR2_FULL_FORWARD, 
+                              SABER_MOTOR2_FULL_STOP);
+ }
+
+ // Fire the values off to the Sabertooth motor controller
+ SaberSerial.print( cSpeedValDir_Motor1, BYTE );
+ SaberSerial.print( cSpeedValDir_Motor2, BYTE );
+}
+
+//    setEngineSpeed function dictates movement of forwards
+//    and backwards. Both motors will turn in the same directions
+//    when placed in opposite orientations.
+//    Negative value moves forward
+//    Positive value moves backward
+//    Zero can be used to stop both motors instantly
+
+//    setEngineSpeedDir function dictates the direction the luggage
+//    Both motors will turn in opposite directions when placed
+//    opposite orientations.
+//    Negative value turns the luggage anticlockwise/left
+//    Positive value turns the luggage clockwise/right
+
+//    Values can be in the range from -100 to 100
+//    The values correspond to the speed of the motors
+
+void loop()
+{
+  ////////////////////////////////////////////////////
+  //               Left Ultrasonic Sensor           //
+  ////////////////////////////////////////////////////
+ 
+  digitalWrite(TRIGPINleft, LOW);  // Set the trigger pin to low for 2uS
+  delayMicroseconds(2);
+  digitalWrite(TRIGPINleft, HIGH);  // Send 10uS high to trigger ranging
+  delayMicroseconds(10);
+  digitalWrite(TRIGPINleft, LOW);  // Send pin low again
+
+  int distanceLeft = pulseIn(ECHOPINleft, HIGH);        // Read in times pulse
+  distanceLeft = distanceLeft/58;                        // Calculate distance from time of pulse
+  
+  ////////////////////////////////////////////////////
+  //              Right Ultrasonic Sensor           //
+  ////////////////////////////////////////////////////
+  
+  digitalWrite(TRIGPINright, LOW);  // Set the trigger pin to low for 2uS
+  delayMicroseconds(2);
+  digitalWrite(TRIGPINright, HIGH);  // Send 10uS high to trigger ranging
+  delayMicroseconds(10);
+  digitalWrite(TRIGPINright, LOW);  // Send pin low again
+
+  int distanceRight = pulseIn(ECHOPINright, HIGH);        // Read in times pulse
+  distanceRight= distanceRight/58;                        // Calculate distance from time of pulse
+
+  ////////////////////////////////////////////////////
+  //               Back Ultrasonic Sensor           //
+  ////////////////////////////////////////////////////
+  
+  digitalWrite(TRIGPINback, LOW);  // Set the trigger pin to low for 2uS
+  delayMicroseconds(2);
+  digitalWrite(TRIGPINback, HIGH);  // Send 10uS high to trigger ranging
+  delayMicroseconds(10);
+  digitalWrite(TRIGPINback, LOW);  // Send pin low again
+
+  int distanceBack = pulseIn(ECHOPINback, HIGH);        // Read in times pulse
+  distanceBack= distanceBack/58;                        // Calculate distance from time of pulse
+
+  ////////////////////////////////////////////////////
+  //               Front Ultrasonic Sensor           //
+  ////////////////////////////////////////////////////
+  
+  digitalWrite(TRIGPINfront, LOW);  // Set the trigger pin to low for 2uSt 
+  delayMicroseconds(2);
+  digitalWrite(TRIGPINfront, HIGH);  // Send 10uS high to trigger ranging
+  delayMicroseconds(10);
+  digitalWrite(TRIGPINfront, LOW);  // Send pin low again
+
+  int distanceFront = pulseIn(ECHOPINfront, HIGH);        // Read in times pulse
+  distanceFront= distanceFront/58;                        // Calculate distance from time of pulse
+  
+  ////////////////////////////////////////////////////
+  //               Print Ultrasonic Data            //
+  ////////////////////////////////////////////////////
+  /*
+  Serial.print("  Left Ultrasonic (cm): ");
+  Serial.print(distanceLeft);
+  Serial.print("  Right Ultrasonic (cm); ");
+  Serial.print(distanceRight);
+  Serial.print("  Back Ultrasonic (cm); ");
+  Serial.print(distanceBack);
+  Serial.print("  Front Ultrasonic (cm); ");
+  Serial.println(distanceFront);
+ */
+ 
+  ////////////////////////////////////////////////////
+  //               Wii IR Sensor Data               //
+  ////////////////////////////////////////////////////
+  
+  result = ircam.read();  // Call read function from PVision.cpp and read data into result.
+    
+  if (result & BLOB1)
+  {
+    digitalWrite(52, HIGH);   // set the LED on
+    Serial.print("BLOB1 detected. X:");
+    Serial.print(ircam.Blob1.X);
+    Serial.print(" Y:");
+    Serial.print(ircam.Blob1.Y);
+    Serial.print(" Size:");
+    Serial.println(ircam.Blob1.Size);
+    digitalWrite(52, LOW);    // set the LED off
+
+  }
+  
+  if ((ircam.Blob1.X > 550) && (ircam.Blob1.X < 700)){
+    setEngineSpeedDir( 50 );  //Move Forward
+    Serial.println("RIGHT");
+        delay(500);
+  }
+  
+  if ((ircam.Blob1.X > 700) && (ircam.Blob1.X < 1023)){
+    setEngineSpeedDir( 100 );  //Move Forward
+     Serial.println("RIGHT FAST");
+     delay(500);    
+  }
+  
+  if ((ircam.Blob1.X < 450) && (ircam.Blob1.X > 300)){
+    setEngineSpeedDir( -50 );  //Move Forward
+     Serial.println("LEFT");
+    delay(500);  
+  }
+  
+  if ((ircam.Blob1.X < 300) && (ircam.Blob1.X > 0)){
+    setEngineSpeedDir( -100 );  //Move Forward
+     Serial.println("LEFT FAST");
+    delay(500);  
+  }
+  
+    if ((ircam.Blob1.X < 550) && (ircam.Blob1.X > 450)){
+    setEngineSpeed( 50 );  //Move Forward
+     Serial.println("Foward");
+    delay(500);  
+  }
+  /*
+  
+  ////////////////////////////////////////////////////
+  //      Sensor Booleans for object detection      //
+  ////////////////////////////////////////////////////
+  
+  if (distanceLeft < 50 && distanceLeft >= 5) 
+    leftSensor = true;
+  else 
+    leftSensor = false;
+    
+  if (distanceRight < 50 && distanceLeft >= 5) 
+    rightSensor = true;
+  else 
+    rightSensor = false;
+    
+  if (distanceBack < 50 && distanceLeft >= 5) 
+    backSensor = true;
+  else 
+    backSensor = false;
+    
+  if (distanceFront < 50 && distanceLeft >= 5) 
+    frontSensor = true;
+  else 
+    frontSensor = false;
+  
+  //////////////////////////////////////////////////////////////////
+  //     Object Avoidance: Motor controlled by sensor feedback    //
+  //////////////////////////////////////////////////////////////////
+  
+  if ((leftSensor == true) || (frontSensor == true) || (rightSensor == true))      // obstacle detected
+  {
+    if((leftSensor == false) && (frontSensor == true) && (rightSensor == false)){            // obstacle just in middle, break                                                                                             // and follow forward
+      Serial.println(" Probably owner ");
+    }
+    
+    if((leftSensor == true) && (frontSensor == false) && (rightSensor == true)){        // obstacle on left and right but not in middle, break and follow forward
+      Serial.println(" Squeeze through! ");
+    }
+    
+    if ((leftSensor == true) && (frontSensor == true) && (rightSensor == false)) {           // obstacle on left
+      // Move right LOTS
+      Serial.println(" -----------> ");
+    }
+    
+    if ((leftSensor == false) && (frontSensor == true) && (rightSensor == true)){            // obstacle on right
+      // Move left LOTS
+      Serial.println(" <----------- ");
+    }
+    
+    if ((leftSensor == true) && (frontSensor == false) && (rightSensor == false)){            // obstacle on far left
+      // Move right
+      Serial.println(" ----> ");
+    }
+    
+    if ((leftSensor == false) && (frontSensor == false) && (rightSensor == true)){            // obstacle on far right
+      // Move left
+      Serial.println(" <---- ");
+    }
+  
+    if ((leftSensor == true) && (frontSensor == true) && (distanceBack <50 && distanceBack>5)){            // obstacle on far right
+      // Stop. Person/Obstacle walking between user and robot
+      Serial.println(" Stop ");
+    }
+    
+    if ((leftSensor == true) && (frontSensor == true) && (rightSensor == true) && (backSensor == true)){            // obstacle on far right
+      // Surrounded in all directions
+      Serial.println(" Surrender ");
+    }
+  }
+  
+  */  
+   // delay(1000);
+}

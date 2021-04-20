@@ -1,0 +1,133 @@
+/* ob = obstacle detected								Explanation of terms
+   
+   leftSense = left ultrasonic sensor
+   centreSense = centre ultrasonic sensor
+   rightSense = right ultrasonic sensor
+   backSense = back ultrasonic sensor
+
+   l = left motor
+   r = right motor   
+
+   lspeed = speed of left motor
+   rspeed = speed of right motor
+ 
+   for = forward direction
+   bac = backward direction
+
+   owner = owner
+
+   ahead = owner within 5 pixels(?) of centre axis
+   left = owner on left of ahead
+   right = owner on right of ahead
+
+   ledSize = size of LED
+   x = perfect size of LED
+*/   
+
+
+
+//Headers
+
+
+
+main program
+[
+    Initialisation sequence
+    {
+       wait for two seconds
+       check all systems etc
+    }
+
+    forever
+    {
+       while (owner = ahead)                 // while owner is determined to be vaguely in front				Owner ahead
+       {
+		Break if obstacle found
+	   if ledSize = x               // correct distance away							Owner ahead and right distance
+           {
+              l = for                      // follow forward
+              r = for
+           }
+
+	   if ledSize < x               // too far away								Owner ahead and too far away
+           {
+              lspeed ++                      // speed up
+              rspeed ++
+           }
+	   
+           if ledSize > x               // too close									Owner ahead and too close
+           {
+              lspeed --                      // slow down
+              rspeed --
+           }
+
+       }   
+
+
+       While (owner = left)													Owner left
+       {
+           break if obstacle found 
+   lspeed ++                      // if owner is left of middle, turn left
+           rspeed --  
+	   
+       }
+
+       While (owner = right)												Owner right
+       {
+           break if obstacle found 
+   lspeed --                      // if owner is right of middle, turn right
+           rspeed ++
+       }
+
+       While (ob in leftSense, centreSense or rightSense)									Obstacle found
+       { 
+           if no ob in centreSense and rightSense    and ob in leftSense    // obstacle on the left             Obstacle on left
+          {
+             lspeed --                                         // move right
+             rspeed ++
+          }
+
+          if no ob in centreSense and leftSense    and ob in rightSense    // obstacle on the right 		Obstacle on right
+          {
+             lspeed ++                                         // move left
+             rspeed --
+          }
+
+          if no ob in rightSense and leftSense    and ob in centreSense    // obstacle just in front	Obstacle just in front, follow owner
+          {    
+               if owner = left
+               {
+                  lspeed ++                        // if owner is left of middle, turn left until ob lost
+                  rspeed stop  
+               }
+
+               if owner = right
+               {
+                   lspeed stop                     // if owner is right of middle, turn right until ob lost
+                   rspeed ++
+               }                                   // if owner is obstacle, then the luggage will stop until they move out of range
+          }
+
+          if ob in centreSense and rightSense and leftSense                // obstacle all ahead        	Obstacle all ahead/around
+          {
+             minimum speed(2 seconds)                          // equivalent to waiting
+             if ob in centreSense and rightSense and leftSense             // still an obstacle? reverse until one of the sensors loses the obstacle
+             {
+                if no ob in backSense
+                {
+                    l=bac & r=bac,
+                    until no ob in leftSense OR rightSense OR centreSense
+                }
+                if ob in back                                  // obstacle behind too? wait and reassess
+                {
+                wait(2 secs)
+                }
+             }
+          }
+       }
+    }
+]
+
+
+
+
